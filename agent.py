@@ -17,7 +17,11 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence lane
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
+# ✏️ Build 2, step 2.1: schemas for the tools you add.
+# next_available_day was here at 2.1, served out of LOCAL_TOOLS. At 2.2 it moved
+# to support/mcp_server.py: the server owns the name now, and tool_list() merges
+# what it answers. One name, one owner.
+EXTRA_TOOLS: List[Dict[str, Any]] = []
 LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
 
 
@@ -68,13 +72,13 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
     answer = ""
     turns = 1
     while response.stop_reason == "tool_use" and turns < MAX_TOOL_CALLS:
-        messages.append({"role": "assistant", "content": text_of(response)})
+        messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results(response)})
-        answer = text_of(response)
         response = client.messages.create(
             model=MODEL, max_tokens=4096, system=runtime_preamble() + SYSTEM_PROMPT + TONE_ADDENDUM,
             thinking={"type": "adaptive"}, tools=tools, messages=messages,
         )
+        answer = text_of(response)
         turns += 1
 
     return answer
@@ -83,7 +87,7 @@ def run_agent(pnr: str, last_name: str, message: str) -> str:            # ✏�
 def tool_list() -> List[Dict[str, Any]]:                   # ✏️ Build 2, step 2.2
     """Given. Exactly what Claude is offered on every turn; run.py --show-tools
     prints this list."""
-    return build_tools() + EXTRA_TOOLS
+    return build_tools() + EXTRA_TOOLS + mcp_client.tools()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -119,17 +123,38 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
                 "type": "object",
                 "properties": {
                     "flight_no": {"type": "string"},
-                    "date": {"type": "string", "description": "MM/DD/YYYY"},
+                    "date": {"type": "string", "description": "YYYY-MM-DD"},
                 },
                 "required": ["flight_no", "date"],
             },
         },
         {
             "name": "search_alternatives",
-            "description": "search",
+            "description": (
+                "Find the flights Larkspur can re-route this customer onto, for the "
+                "disrupted segment of their booking. Call it once get_flight_status has "
+                "told you the flight is DELAYED, CANCELLED or DIVERTED, and before you "
+                "offer the customer any specific flight: never name a departure time from "
+                "memory. Origin, destination, date, cabin and passenger count are read "
+                "from the booking, so the confirmation code is all it needs. Returns up "
+                "to seven options, each with an option_id, its flight numbers, date, "
+                "local departure and arrival, stops, cabin, seats available and operating "
+                "carrier, plus the options it rejected and why. Pass an option_id to "
+                "hold_seat to reserve one for 15 minutes, or to check_policy as "
+                "chosen_option_id when the wait for that option decides what care the "
+                "customer is owed."
+            ),
             "input_schema": {
                 "type": "object",
-                "properties": {"pnr": {"type": "string"}},
+                "properties": {
+                    "pnr": {
+                        "type": "string",
+                        "description": (
+                            "Confirmation code of the booking to re-route. The disrupted "
+                            "segment is identified from it; do not pass a route or a date."
+                        ),
+                    },
+                },
                 "required": ["pnr"],
             },
         },
