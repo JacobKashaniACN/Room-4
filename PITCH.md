@@ -12,7 +12,10 @@ Lever: cost
 
 ## Priya asked
 
-Costs: 
-Wrong:
-Runs it: 
-Left out: 
+Costs: About $0.049 per resolved contact against $6.90 for a human agent — roughly 140x cheaper — measured across all five disruption shapes on claude-sonnet-5.
+
+Wrong: The first untrue thing is a date. next_available_day checks for a single open seat and is never told the party size, so on a two-passenger booking it can name a soonest-travel day that cannot seat both, and the agent states that date as fact. After that, the customer plans around a day that was never real.
+
+Runs it: Larkspur's disruption-care operations team owns it after we leave; the edge cases it cannot handle (groups, partner segments, unaccompanied minors, refunds) already route to a human agent, so it runs day-to-day with human backup rather than unattended. [confirm the actual owner on your side]
+
+Left out: Groups, partner-airline segments, unaccompanied minors and refunds are deliberately out of scope and escalate to a human with a written summary. The agent decides and explains entitlements but never books — only the customer's own Confirm-click finalises a rebooking.
